@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to PDF Converter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #3498db;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .drop-zone:hover {
+            background-color: #f8f9fa;
+            border-color: #2980b9;
+        }
+
+        .preview-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .preview-item {
+            position: relative;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+
+        .controls {
+            margin-top: 30px;
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+
+        .setting-group {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .setting-group h3 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .advanced-settings {
+            margin-top: 20px;
+        }
+
+        .image-actions {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            display: flex;
+            gap: 5px;
+        }
+
+        .image-actions button {
+            padding: 5px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Advanced Image to PDF Converter</h1>
+        
+        <div class="drop-zone" id="dropZone">
+            <p>Drag & Drop images here or click to upload</p>
+            <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        </div>
+
+        <div class="preview-container" id="previewContainer"></div>
+
+        <div class="controls">
+            <div class="setting-group">
+                <h3>Page Layout</h3>
+                <select id="pageSpread">
+                    <option value="single">Single Page</option>
+                    <option value="two">Two Page Spread</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <h3>Border Settings</h3>
+                <label>Margin Size: <span id="marginValue">10</span>mm</label>
+                <input type="range" id="marginSize" min="0" max="30" value="10">
+                
+                <label>Border Color:</label>
+                <input type="color" id="borderColor" value="#000000">
+            </div>
+
+            <div class="setting-group">
+                <h3>Page Settings</h3>
+                <select id="pageSize">
+                    <option value="a4">A4</option>
+                    <option value="letter">Letter</option>
+                </select>
+                
+                <select id="pageOrientation">
+                    <option value="portrait">Portrait</option>
+                    <option value="landscape">Landscape</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="advanced-settings">
+            <button onclick="generatePDF()"><i class="bi bi-file-pdf"></i> Generate PDF</button>
+            <button onclick="clearAll()"><i class="bi bi-trash"></i> Clear All</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        const { jsPDF } = window.jspdf;
+        let images = [];
+
+        // Drag & Drop Handlers
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '#f8f9fa';
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.backgroundColor = 'white';
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+        function handleFiles(files) {
+            for (const file of files) {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        images.push({
+                            data: e.target.result,
+                            name: file.name
+                        });
+                        updatePreview();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        }
+
+        function updatePreview() {
+            const container = document.getElementById('previewContainer');
+            container.innerHTML = images.map((img, index) => `
+                <div class="preview-item">
+                    <img src="${img.data}" alt="${img.name}">
+                    <div class="image-actions">
+                        <button onclick="moveImage(${index}, -1)"><i class="bi bi-arrow-up"></i></button>
+                        <button onclick="moveImage(${index}, 1)"><i class="bi bi-arrow-down"></i></button>
+                        <button onclick="removeImage(${index})"><i class="bi bi-x"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function moveImage(index, direction) {
+            if (index + direction >= 0 && index + direction < images.length) {
+                [images[index], images[index + direction]] = [images[index + direction], images[index]];
+                updatePreview();
+            }
+        }
+
+        function removeImage(index) {
+            images.splice(index, 1);
+            updatePreview();
+        }
+
+        // PDF Generation
+        async function generatePDF() {
+            if (images.length === 0) return alert('Please add images first!');
+
+            const doc = new jsPDF({
+                orientation: document.getElementById('pageOrientation').value,
+                unit: 'mm',
+                format: document.getElementById('pageSize').value
+            });
+
+            const margin = parseInt(document.getElementById('marginSize').value);
+            const borderColor = document.getElementById('borderColor').value;
+            const pageSpread = document.getElementById('pageSpread').value;
+
+            for (let i = 0; i < images.length; i++) {
+                if (i !== 0) doc.addPage();
+                
+                const img = new Image();
+                img.src = images[i].data;
+                await new Promise(resolve => img.onload = resolve);
+
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                
+                const contentWidth = pageWidth - (margin * 2);
+                const contentHeight = pageHeight - (margin * 2);
+                
+                // Draw border
+                if (margin > 0) {
+                    doc.setDrawColor(borderColor);
+                    doc.rect(margin, margin, contentWidth, contentHeight);
+                }
+
+                // Calculate image dimensions
+                const ratio = Math.min(contentWidth / img.width, contentHeight / img.height);
+                const width = img.width * ratio;
+                const height = img.height * ratio;
+                const x = margin + (contentWidth - width) / 2;
+                const y = margin + (contentHeight - height) / 2;
+
+                doc.addImage(img, 'JPEG', x, y, width, height);
+            }
+
+            doc.save('converted.pdf');
+        }
+
+        function clearAll() {
+            images = [];
+            updatePreview();
+        }
+
+        // Update margin value display
+        document.getElementById('marginSize').addEventListener('input', (e) => {
+            document.getElementById('marginValue').textContent = e.target.value;
+        });
+    </script>
+</body>
+</html>
